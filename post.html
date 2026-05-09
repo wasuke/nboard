@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NarrativeBoard - 投稿</title>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<style>
+body{
+    font-family:sans-serif;
+    background:#f5f5f5;
+    margin:20px;
+}
+
+.container{
+    max-width:700px;
+    margin:auto;
+    background:white;
+    padding:30px;
+    border-radius:12px;
+    box-shadow:0 2px 10px rgba(0,0,0,0.1);
+}
+
+h1{
+    margin-top:0;
+}
+
+.info{
+    margin-top:20px;
+    padding:12px;
+    background:#eef7ff;
+    border:1px solid #b9d8ff;
+    border-radius:8px;
+    line-height:1.7;
+}
+
+label{
+    display:block;
+    margin-top:20px;
+    font-weight:bold;
+}
+
+input,
+textarea{
+    width:100%;
+    box-sizing:border-box;
+    padding:12px;
+    margin-top:8px;
+    font-size:16px;
+}
+
+textarea{
+    min-height:180px;
+    resize:vertical;
+}
+
+button{
+    margin-top:30px;
+    padding:14px 24px;
+    font-size:16px;
+    cursor:pointer;
+}
+
+button:disabled{
+    opacity:0.6;
+    cursor:not-allowed;
+}
+
+.success{
+    margin-top:20px;
+    padding:12px;
+    background:#e8ffe8;
+    border:1px solid #7ed37e;
+    border-radius:8px;
+    display:none;
+}
+
+.error{
+    margin-top:20px;
+    padding:12px;
+    background:#ffeaea;
+    border:1px solid #ff8a8a;
+    border-radius:8px;
+    display:none;
+}
+
+.counter{
+    margin-top:6px;
+    text-align:right;
+    color:#666;
+    font-size:14px;
+}
+
+footer{
+    margin-top:60px;
+    padding-top:20px;
+    border-top:1px solid #ddd;
+    color:#666;
+    font-size:14px;
+    line-height:1.8;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<h1>NarrativeBoard</h1>
+<p id="eventTitle">投稿画面</p>
+
+<div class="info">
+質問・コメントを投稿できます。投稿内容は司会・運営担当者が確認した後、会場画面に表示されます。
+</div>
+
+<label>
+名前（任意）
+<input type="text" id="userName" maxlength="40" placeholder="匿名可">
+</label>
+
+<label>
+コメント
+<textarea id="comment" maxlength="500" placeholder="質問やコメントを入力してください"></textarea>
+<div class="counter">
+<span id="charCount">0</span> / 500
+</div>
+</label>
+
+<button id="sendBtn">投稿する</button>
+
+<div id="successBox" class="success">
+投稿しました。ありがとうございました。
+</div>
+
+<div id="errorBox" class="error">
+投稿に失敗しました。
+</div>
+
+<footer>
+    NarrativeBoard<br>
+    開発：柊 和佑<br>
+    中部大学 人文学部 メディア情報社会学科
+</footer>
+
+</div>
+
+<script>
+const SUPABASE_URL =
+    "https://aobmkrgxycwpyveghdki.supabase.co";
+
+const SUPABASE_KEY =
+    "sb_publishable_tpo-RgJQVWUcm8yY6-vONA_O0EAnCSW";
+
+const sb = window.supabase.createClient(
+    SUPABASE_URL,
+    SUPABASE_KEY
+);
+
+const params =
+    new URLSearchParams(window.location.search);
+
+const eventId =
+    params.get("event");
+
+const commentArea =
+    document.getElementById("comment");
+
+const charCount =
+    document.getElementById("charCount");
+
+const sendBtn =
+    document.getElementById("sendBtn");
+
+if(!eventId){
+    showError("event parameter がありません。URLを確認してください。");
+    sendBtn.disabled = true;
+}else{
+    loadEventTitle();
+}
+
+commentArea.addEventListener("input", () => {
+    charCount.textContent = commentArea.value.length;
+});
+
+sendBtn.addEventListener("click", submitComment);
+
+async function loadEventTitle(){
+
+    const { data, error } = await sb
+        .from("events_public")
+        .select("event_name")
+        .eq("id", eventId)
+        .single();
+
+    if(error){
+        console.error(error);
+        document.getElementById("eventTitle").textContent =
+            "投稿画面";
+        return;
+    }
+
+    document.getElementById("eventTitle").textContent =
+        data.event_name + " 投稿画面";
+}
+
+async function submitComment(){
+
+    hideMessages();
+
+    const userName =
+        document.getElementById("userName").value.trim();
+
+    const comment =
+        document.getElementById("comment").value.trim();
+
+    if(!eventId){
+        showError("event parameter がありません。");
+        return;
+    }
+
+    if(comment === ""){
+        showError("コメントを入力してください。");
+        return;
+    }
+
+    if(comment.length > 500){
+        showError("文字数が多すぎます。");
+        return;
+    }
+
+    sendBtn.disabled = true;
+    sendBtn.textContent = "送信中...";
+
+    const { error } = await sb
+        .from("comments")
+        .insert([
+            {
+                event_id: eventId,
+                user_name: userName,
+                comment: comment,
+                status: "pending",
+                display_order: 0,
+                is_pinned: false
+            }
+        ]);
+
+    sendBtn.disabled = false;
+    sendBtn.textContent = "投稿する";
+
+    if(error){
+        console.error(error);
+        showError("投稿に失敗しました。");
+        return;
+    }
+
+    document.getElementById("userName").value = "";
+    commentArea.value = "";
+    charCount.textContent = "0";
+
+    document.getElementById("successBox").style.display = "block";
+}
+
+function hideMessages(){
+
+    document.getElementById("successBox").style.display = "none";
+    document.getElementById("errorBox").style.display = "none";
+}
+
+function showError(message){
+
+    const box = document.getElementById("errorBox");
+    box.textContent = message;
+    box.style.display = "block";
+}
+</script>
+
+</body>
+</html>

@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NarrativeBoard - イベント生成</title>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<style>
+body{
+    font-family:sans-serif;
+    margin:40px;
+    background:#f5f5f5;
+}
+
+.container{
+    max-width:760px;
+    margin:auto;
+    background:white;
+    padding:30px;
+    border-radius:12px;
+    box-shadow:0 2px 10px rgba(0,0,0,0.1);
+}
+
+h1{
+    margin-top:0;
+}
+
+label{
+    display:block;
+    margin-top:20px;
+    font-weight:bold;
+}
+
+input{
+    width:100%;
+    padding:12px;
+    font-size:16px;
+    margin-top:8px;
+    box-sizing:border-box;
+}
+
+button{
+    margin-top:30px;
+    padding:14px 24px;
+    font-size:16px;
+    cursor:pointer;
+}
+
+.result{
+    margin-top:40px;
+    padding:20px;
+    background:#fafafa;
+    border:1px solid #ddd;
+    border-radius:8px;
+    word-break:break-all;
+}
+
+.urlBox{
+    margin-top:20px;
+}
+
+.urlBox a{
+    display:block;
+    margin-top:6px;
+}
+
+.warning{
+    margin-top:20px;
+    padding:12px;
+    background:#fff3cd;
+    border:1px solid #ffe08a;
+    border-radius:8px;
+    color:#5f4700;
+}
+
+.note{
+    margin-top:20px;
+    color:#666;
+    font-size:14px;
+    line-height:1.7;
+}
+
+footer{
+    margin-top:60px;
+    padding-top:20px;
+    border-top:1px solid #ddd;
+    color:#666;
+    font-size:14px;
+    line-height:1.8;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<h1>NarrativeBoard</h1>
+<p>イベント生成</p>
+
+<label>
+イベント名
+<input type="text" id="eventName" placeholder="例：公開講演会2026">
+</label>
+
+<button id="createBtn">イベント生成</button>
+
+<div id="resultArea" class="result" style="display:none;">
+
+    <h2>生成完了</h2>
+
+    <div class="warning">
+        管理HTML URLには管理用トークンが含まれています。参加者には共有しないでください。
+    </div>
+
+    <div class="urlBox">
+        <strong>投稿HTML</strong>
+        <a id="postUrl" target="_blank"></a>
+    </div>
+
+    <div class="urlBox">
+        <strong>管理HTML</strong>
+        <a id="adminUrl" target="_blank"></a>
+    </div>
+
+    <div class="urlBox">
+        <strong>表示HTML</strong>
+        <a id="displayUrl" target="_blank"></a>
+    </div>
+
+    <div class="urlBox">
+        <strong>イベントID</strong>
+        <div id="eventIdView"></div>
+    </div>
+
+    <div class="urlBox">
+        <strong>管理用トークン</strong>
+        <div id="adminTokenView"></div>
+    </div>
+
+    <div class="note">
+        投稿HTMLと表示HTMLは参加者・会場表示用です。管理HTMLは司会・運営担当者のみが使用します。
+    </div>
+
+</div>
+
+<footer>
+    NarrativeBoard<br>
+    開発：柊 和佑<br>
+    中部大学 人文学部 メディア情報社会学科
+</footer>
+
+</div>
+
+<script>
+const SUPABASE_URL =
+    "https://aobmkrgxycwpyveghdki.supabase.co";
+
+const SUPABASE_KEY =
+    "sb_publishable_tpo-RgJQVWUcm8yY6-vONA_O0EAnCSW";
+
+const sb = window.supabase.createClient(
+    SUPABASE_URL,
+    SUPABASE_KEY
+);
+
+document
+    .getElementById("createBtn")
+    .addEventListener("click", createEvent);
+
+function generateAdminToken(){
+
+    const uuidPart =
+        crypto.randomUUID();
+
+    const randomPart =
+        Math.random()
+        .toString(36)
+        .slice(2);
+
+    return uuidPart + "-" + randomPart;
+}
+
+function getBaseUrl(){
+
+    const url =
+        new URL(window.location.href);
+
+    const path =
+        url.pathname.replace(/index\.html$/, "");
+
+    return url.origin + path;
+}
+
+async function createEvent(){
+
+    const eventName =
+        document
+        .getElementById("eventName")
+        .value
+        .trim();
+
+    if(eventName === ""){
+        alert("イベント名を入力してください");
+        return;
+    }
+
+    const eventId =
+        crypto.randomUUID();
+
+    const adminToken =
+        generateAdminToken();
+
+    const { error } = await sb
+        .from("events")
+        .insert([
+            {
+                id: eventId,
+                event_name: eventName,
+                admin_token: adminToken
+            }
+        ]);
+
+    if(error){
+        console.error(error);
+        alert("イベント生成に失敗しました");
+        return;
+    }
+
+    const baseUrl =
+        getBaseUrl();
+
+    const postUrl =
+        `${baseUrl}post.html?event=${encodeURIComponent(eventId)}`;
+
+    const adminUrl =
+        `${baseUrl}admin.html?event=${encodeURIComponent(eventId)}&token=${encodeURIComponent(adminToken)}`;
+
+    const displayUrl =
+        `${baseUrl}display.html?event=${encodeURIComponent(eventId)}`;
+
+    document
+        .getElementById("resultArea")
+        .style.display = "block";
+
+    setLink("postUrl", postUrl);
+    setLink("adminUrl", adminUrl);
+    setLink("displayUrl", displayUrl);
+
+    document
+        .getElementById("eventIdView")
+        .textContent = eventId;
+
+    document
+        .getElementById("adminTokenView")
+        .textContent = adminToken;
+}
+
+function setLink(id, url){
+
+    const a =
+        document.getElementById(id);
+
+    a.href = url;
+    a.textContent = url;
+}
+</script>
+
+</body>
+</html>

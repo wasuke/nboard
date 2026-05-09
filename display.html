@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NarrativeBoard - 表示画面</title>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<style>
+body{
+    margin:0;
+    font-family:sans-serif;
+    background:#111;
+    color:white;
+}
+
+.screen{
+    width:100vw;
+    height:100vh;
+    box-sizing:border-box;
+    padding:40px;
+    display:flex;
+    flex-direction:column;
+}
+
+.header{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    border-bottom:2px solid rgba(255,255,255,0.25);
+    padding-bottom:18px;
+    margin-bottom:30px;
+}
+
+h1{
+    margin:0;
+    font-size:32px;
+}
+
+.sub{
+    color:#ccc;
+    font-size:18px;
+}
+
+.comments{
+    flex:1;
+    overflow:hidden;
+    display:flex;
+    flex-direction:column;
+    gap:22px;
+}
+
+.card{
+    background:rgba(255,255,255,0.12);
+    border:1px solid rgba(255,255,255,0.22);
+    border-radius:18px;
+    padding:24px 28px;
+}
+
+.name{
+    color:#ddd;
+    font-size:18px;
+    margin-bottom:10px;
+}
+
+.text{
+    font-size:34px;
+    line-height:1.45;
+    white-space:pre-wrap;
+    word-break:break-word;
+}
+
+.pinned{
+    border-color:rgba(255,255,255,0.6);
+}
+
+.empty{
+    flex:1;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    color:#aaa;
+    font-size:32px;
+}
+
+.footer{
+    margin-top:24px;
+    color:#aaa;
+    font-size:16px;
+    display:flex;
+    justify-content:space-between;
+}
+</style>
+</head>
+
+<body>
+
+<div class="screen">
+
+    <div class="header">
+        <div>
+            <h1 id="eventTitle">NarrativeBoard</h1>
+            <div class="sub">公開コメント</div>
+        </div>
+        <div class="sub" id="updatedAt">読み込み中</div>
+    </div>
+
+    <div id="commentsArea" class="comments">
+        <div class="empty">公開中のコメントはまだありません</div>
+    </div>
+
+    <div class="footer">
+        <div>NarrativeBoard / 中部大学 人文学部 メディア情報社会学科</div>
+        <div>Developed by 柊 和佑</div>
+    </div>
+
+</div>
+
+<script>
+const SUPABASE_URL =
+    "https://aobmkrgxycwpyveghdki.supabase.co";
+
+const SUPABASE_KEY =
+    "sb_publishable_tpo-RgJQVWUcm8yY6-vONA_O0EAnCSW";
+
+const sb = window.supabase.createClient(
+    SUPABASE_URL,
+    SUPABASE_KEY
+);
+
+const params =
+    new URLSearchParams(window.location.search);
+
+const eventId =
+    params.get("event");
+
+if(!eventId){
+    document.getElementById("commentsArea").innerHTML =
+        '<div class="empty">event parameter がありません</div>';
+}else{
+    loadEventTitle();
+    loadPublicComments();
+
+    setInterval(() => {
+        loadPublicComments();
+    }, 5000);
+}
+
+async function loadEventTitle(){
+
+    const { data, error } = await sb
+        .from("events_public")
+        .select("event_name")
+        .eq("id", eventId)
+        .single();
+
+    if(error){
+        console.error(error);
+        return;
+    }
+
+    document.getElementById("eventTitle").textContent =
+        data.event_name;
+}
+
+async function loadPublicComments(){
+
+    const { data, error } = await sb
+        .from("comments")
+        .select("id, user_name, comment, created_at, is_pinned")
+        .eq("event_id", eventId)
+        .eq("status", "public")
+        .order("is_pinned", { ascending:false })
+        .order("created_at", { ascending:false })
+        .limit(5);
+
+    if(error){
+        console.error(error);
+        document.getElementById("commentsArea").innerHTML =
+            '<div class="empty">コメントの読み込みに失敗しました</div>';
+        return;
+    }
+
+    renderComments(data || []);
+
+    document.getElementById("updatedAt").textContent =
+        "更新：" + new Date().toLocaleTimeString("ja-JP", {
+            hour:"2-digit",
+            minute:"2-digit",
+            second:"2-digit"
+        });
+}
+
+function renderComments(comments){
+
+    const area =
+        document.getElementById("commentsArea");
+
+    if(comments.length === 0){
+        area.innerHTML =
+            '<div class="empty">公開中のコメントはまだありません</div>';
+        return;
+    }
+
+    area.innerHTML = "";
+
+    comments.forEach(item => {
+
+        const card =
+            document.createElement("div");
+
+        card.className =
+            "card" + (item.is_pinned ? " pinned" : "");
+
+        card.innerHTML = `
+            <div class="name">${escapeHtml(item.user_name || "匿名")}</div>
+            <div class="text">${escapeHtml(item.comment)}</div>
+        `;
+
+        area.appendChild(card);
+    });
+}
+
+function escapeHtml(text){
+
+    return String(text)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+}
+</script>
+
+</body>
+</html>
