@@ -8,6 +8,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <style>
+
 body{
     margin:0;
     font-family:sans-serif;
@@ -19,10 +20,14 @@ body{
 .screen{
     width:100vw;
     height:100dvh;
+
     box-sizing:border-box;
+
     padding:40px;
+
     display:flex;
     flex-direction:column;
+
     overflow:hidden;
 }
 
@@ -30,9 +35,12 @@ body{
     display:flex;
     justify-content:space-between;
     align-items:center;
+
     border-bottom:2px solid rgba(255,255,255,0.25);
+
     padding-bottom:18px;
     margin-bottom:30px;
+
     flex-shrink:0;
 }
 
@@ -47,12 +55,15 @@ h1{
 }
 
 .comments{
+
     flex:1;
+
     overflow-y:auto;
     overflow-x:hidden;
 
     display:flex;
     flex-direction:column;
+
     gap:22px;
 
     min-height:0;
@@ -63,47 +74,90 @@ h1{
 }
 
 .card{
+
     background:rgba(255,255,255,0.12);
+
     border:1px solid rgba(255,255,255,0.22);
+
     border-radius:18px;
+
     padding:24px 28px;
 
     flex-shrink:0;
+
+    display:flex;
+    flex-direction:column;
+    justify-content:flex-start;
+
+    box-shadow:
+        0 4px 18px rgba(0,0,0,0.35);
 }
 
 .name{
+
     color:#ddd;
+
     font-size:18px;
-    margin-bottom:10px;
+
+    margin-bottom:16px;
+
+    font-weight:bold;
 }
 
 .text{
+
     font-size:clamp(20px, 3vw, 34px);
+
     line-height:1.45;
+
     white-space:pre-wrap;
+
     word-break:break-word;
+
+    overflow-wrap:anywhere;
+
+    display:block;
+
+    width:100%;
 }
 
 .pinned{
-    border-color:rgba(255,255,255,0.6);
-    box-shadow:0 0 12px rgba(255,255,255,0.15);
+
+    border-color:rgba(255,255,255,0.65);
+
+    box-shadow:
+        0 0 18px rgba(255,255,255,0.18);
 }
 
 .empty{
+
     flex:1;
+
     display:flex;
+
     align-items:center;
+
     justify-content:center;
+
     color:#aaa;
+
     font-size:32px;
+
+    text-align:center;
 }
 
 .footer{
+
     margin-top:24px;
+
     color:#aaa;
+
     font-size:16px;
+
     display:flex;
+
     justify-content:space-between;
+
     flex-shrink:0;
 }
 
@@ -137,9 +191,9 @@ h1{
 
     .empty{
         font-size:22px;
-        text-align:center;
     }
 }
+
 </style>
 </head>
 
@@ -148,30 +202,42 @@ h1{
 <div class="screen">
 
     <div class="header">
+
         <div>
-            <h1 id="eventTitle">NarrativeBoard</h1>
-            <div class="sub">公開コメント</div>
+            <h1 id="eventTitle">
+                NarrativeBoard
+            </h1>
+
+            <div class="sub">
+                公開コメント
+            </div>
         </div>
 
         <div class="sub" id="updatedAt">
             読み込み中
         </div>
+
     </div>
 
     <div id="commentsArea" class="comments">
+
         <div class="empty">
             公開中のコメントはまだありません
         </div>
+
     </div>
 
     <div class="footer">
+
         <div>
-            NarrativeBoard / 中部大学 人文学部 メディア情報社会学科
+            NarrativeBoard /
+            中部大学 人文学部 メディア情報社会学科
         </div>
 
         <div>
             Developed by 柊 和佑
         </div>
+
     </div>
 
 </div>
@@ -184,67 +250,95 @@ const SUPABASE_URL =
 const SUPABASE_KEY =
     "sb_publishable_tpo-RgJQVWUcm8yY6-vONA_O0EAnCSW";
 
-const sb = window.supabase.createClient(
-    SUPABASE_URL,
-    SUPABASE_KEY
-);
+const sb =
+    window.supabase.createClient(
+        SUPABASE_URL,
+        SUPABASE_KEY
+    );
 
 const params =
-    new URLSearchParams(window.location.search);
+    new URLSearchParams(
+        window.location.search
+    );
 
 const eventId =
     params.get("event");
 
 if(!eventId){
 
-    document.getElementById("commentsArea").innerHTML =
+    document.getElementById(
+        "commentsArea"
+    ).innerHTML =
         '<div class="empty">event parameter がありません</div>';
 
 }else{
 
     loadEventTitle();
+
     loadPublicComments();
 
     setInterval(() => {
+
         loadPublicComments();
+
     }, 5000);
 }
 
 async function loadEventTitle(){
 
-    const { data, error } = await sb
+    const { data, error } =
+        await sb
         .from("events_public")
         .select("event_name")
         .eq("id", eventId)
         .single();
 
     if(error){
+
         console.error(error);
+
         return;
     }
 
-    document.getElementById("eventTitle").textContent =
+    document.getElementById(
+        "eventTitle"
+    ).textContent =
         data.event_name;
 }
 
 async function loadPublicComments(){
 
-    const { data, error } = await sb
+    const { data, error } =
+        await sb
         .from("comments")
         .select(
-            "id, user_name, comment, created_at, is_pinned"
+            `
+            id,
+            user_name,
+            comment,
+            created_at,
+            is_pinned
+            `
         )
         .eq("event_id", eventId)
         .eq("status", "public")
-        .order("is_pinned", { ascending:false })
-        .order("created_at", { ascending:false })
+        .order(
+            "is_pinned",
+            { ascending:false }
+        )
+        .order(
+            "created_at",
+            { ascending:false }
+        )
         .limit(10);
 
     if(error){
 
         console.error(error);
 
-        document.getElementById("commentsArea").innerHTML =
+        document.getElementById(
+            "commentsArea"
+        ).innerHTML =
             '<div class="empty">コメントの読み込みに失敗しました</div>';
 
         return;
@@ -252,7 +346,9 @@ async function loadPublicComments(){
 
     renderComments(data || []);
 
-    document.getElementById("updatedAt").textContent =
+    document.getElementById(
+        "updatedAt"
+    ).textContent =
         "更新：" +
         new Date().toLocaleTimeString(
             "ja-JP",
@@ -267,7 +363,9 @@ async function loadPublicComments(){
 function renderComments(comments){
 
     const area =
-        document.getElementById("commentsArea");
+        document.getElementById(
+            "commentsArea"
+        );
 
     if(comments.length === 0){
 
@@ -286,15 +384,23 @@ function renderComments(comments){
 
         card.className =
             "card" +
-            (item.is_pinned ? " pinned" : "");
+            (
+                item.is_pinned
+                ? " pinned"
+                : ""
+            );
 
         card.innerHTML = `
             <div class="name">
-                ${escapeHtml(item.user_name || "匿名")}
+                ${escapeHtml(
+                    item.user_name || "匿名"
+                )}
             </div>
 
             <div class="text">
-                ${escapeHtml(item.comment)}
+                ${escapeHtml(
+                    item.comment
+                )}
             </div>
         `;
 
@@ -305,10 +411,15 @@ function renderComments(comments){
 function escapeHtml(text){
 
     return String(text)
+
         .replaceAll("&", "&amp;")
+
         .replaceAll("<", "&lt;")
+
         .replaceAll(">", "&gt;")
+
         .replaceAll('"', "&quot;")
+
         .replaceAll("'", "&#039;");
 }
 
