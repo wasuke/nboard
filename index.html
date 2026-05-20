@@ -131,6 +131,11 @@ footer{
     </div>
 
     <div class="urlBox">
+        <strong>分析HTML</strong>
+        <a id="analysisUrl" target="_blank"></a>
+    </div>
+
+    <div class="urlBox">
         <strong>イベントID</strong>
         <div id="eventIdView"></div>
     </div>
@@ -241,6 +246,9 @@ async function createEvent(){
     const displayUrl =
         `${baseUrl}display.html?event=${encodeURIComponent(eventId)}`;
 
+    const analysisUrl =
+        `${baseUrl}analysis.html?event=${encodeURIComponent(eventId)}&token=${encodeURIComponent(adminToken)}`;
+    
     document
         .getElementById("resultArea")
         .style.display = "block";
@@ -248,6 +256,7 @@ async function createEvent(){
     setLink("postUrl", postUrl);
     setLink("adminUrl", adminUrl);
     setLink("displayUrl", displayUrl);
+    setLink("analysisUrl", analysisUrl);
 
     document
         .getElementById("eventIdView")
