@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NarrativeBoard - 分析画面</title>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<style>
+body{
+    font-family:sans-serif;
+    background:#f5f5f5;
+    margin:20px;
+}
+
+.container{
+    max-width:1100px;
+    margin:auto;
+    background:white;
+    padding:30px;
+    border-radius:12px;
+    box-shadow:0 2px 10px rgba(0,0,0,0.1);
+}
+
+h1{
+    margin-top:0;
+}
+
+.notice{
+    padding:12px;
+    border-radius:8px;
+    background:#eef7ff;
+    border:1px solid #b9d8ff;
+    margin-bottom:20px;
+    line-height:1.7;
+}
+
+.error{
+    padding:12px;
+    border-radius:8px;
+    background:#ffeaea;
+    border:1px solid #ff8a8a;
+    margin-bottom:20px;
+    display:none;
+}
+
+.summary{
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(160px, 1fr));
+    gap:14px;
+    margin:20px 0;
+}
+
+.summaryCard{
+    background:#fafafa;
+    border:1px solid #ddd;
+    border-radius:10px;
+    padding:16px;
+}
+
+.summaryCard .label{
+    color:#666;
+    font-size:13px;
+}
+
+.summaryCard .value{
+    font-size:30px;
+    font-weight:bold;
+    margin-top:6px;
+}
+
+button{
+    padding:10px 16px;
+    cursor:pointer;
+    margin-right:8px;
+    margin-top:8px;
+}
+
+.chartBox{
+    margin-top:30px;
+    padding:20px;
+    background:#fafafa;
+    border:1px solid #ddd;
+    border-radius:10px;
+}
+
+.barRow{
+    display:grid;
+    grid-template-columns:90px 1fr 60px;
+    gap:10px;
+    align-items:center;
+    margin:8px 0;
+}
+
+.barOuter{
+    background:#e5e5e5;
+    height:24px;
+    border-radius:999px;
+    overflow:hidden;
+}
+
+.barInner{
+    background:#333;
+    height:100%;
+    width:0%;
+}
+
+.tableWrap{
+    margin-top:30px;
+    overflow-x:auto;
+}
+
+table{
+    width:100%;
+    border-collapse:collapse;
+    font-size:14px;
+}
+
+th,
+td{
+    border:1px solid #ddd;
+    padding:8px;
+    vertical-align:top;
+}
+
+th{
+    background:#f0f0f0;
+}
+
+.commentCell{
+    min-width:320px;
+    white-space:pre-wrap;
+}
+
+footer{
+    margin-top:60px;
+    padding-top:20px;
+    border-top:1px solid #ddd;
+    color:#666;
+    font-size:14px;
+    line-height:1.8;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<h1>NarrativeBoard 分析画面</h1>
+
+<div class="notice">
+この画面では、イベントの投稿データを集計し、CSVとして保存できます。<br>
+管理用トークン付きURLで開いてください。
+</div>
+
+<div id="errorBox" class="error"></div>
+
+<div id="eventInfo"></div>
+
+<div>
+    <button onclick="loadData()">再読み込み</button>
+    <button onclick="downloadCSV()">CSVダウンロード</button>
+</div>
+
+<div class="summary" id="summaryArea"></div>
+
+<div class="chartBox">
+    <h2>時間帯別投稿数</h2>
+    <p>5分単位で投稿数を集計しています。</p>
+    <div id="timeChart"></div>
+</div>
+
+<div class="chartBox">
+    <h2>状態別件数</h2>
+    <div id="statusChart"></div>
+</div>
+
+<div class="tableWrap">
+    <h2>投稿一覧</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>日時</th>
+                <th>名前</th>
+                <th>状態</th>
+                <th>固定</th>
+                <th>コメント</th>
+            </tr>
+        </thead>
+        <tbody id="commentsTable"></tbody>
+    </table>
+</div>
+
+<footer>
+    NarrativeBoard<br>
+    開発：柊 和佑<br>
+    中部大学 人文学部 メディア情報社会学科
+</footer>
+
+</div>
+
+<script>
+const SUPABASE_URL =
+    "https://aobmkrgxycwpyveghdki.supabase.co";
+
+const SUPABASE_KEY =
+    "sb_publishable_tpo-RgJQVWUcm8yY6-vONA_O0EAnCSW";
+
+const params =
+    new URLSearchParams(window.location.search);
+
+const eventId =
+    params.get("event");
+
+const adminToken =
+    params.get("token");
+
+const sb = window.supabase.createClient(
+    SUPABASE_URL,
+    SUPABASE_KEY,
+    {
+        global:{
+            headers:{
+                "x-admin-token": adminToken || ""
+            }
+        }
+    }
+);
+
+let allComments = [];
+let eventName = "";
+
+if(!eventId || !adminToken){
+    showError("event または token がありません。分析URLを確認してください。");
+}else{
+    loadEventInfo();
+    loadData();
+}
+
+async function loadEventInfo(){
+
+    const { data, error } = await sb
+        .from("events_public")
+        .select("event_name, created_at")
+        .eq("id", eventId)
+        .single();
+
+    if(error){
+        console.error(error);
+        showError("イベント情報の取得に失敗しました。");
+        return;
+    }
+
+    eventName = data.event_name;
+
+    document.getElementById("eventInfo").innerHTML =
+        "<p><strong>イベント名：</strong>" +
+        escapeHtml(data.event_name) +
+        "</p>";
+}
+
+async function loadData(){
+
+    hideError();
+
+    const { data, error } = await sb
+        .from("comments")
+        .select("id, event_id, user_name, comment, status, is_pinned, display_order, created_at")
+        .eq("event_id", eventId)
+        .order("created_at", { ascending:true });
+
+    if(error){
+        console.error(error);
+        showError("投稿データの取得に失敗しました。管理用トークンまたはRLS設定を確認してください。");
+        return;
+    }
+
+    allComments = data || [];
+
+    renderSummary();
+    renderTimeChart();
+    renderStatusChart();
+    renderTable();
+}
+
+function renderSummary(){
+
+    const total = allComments.length;
+
+    const publicCount =
+        allComments.filter(x => x.status === "public").length;
+
+    const pendingCount =
+        allComments.filter(x => x.status === "pending").length;
+
+    const hiddenCount =
+        allComments.filter(x => x.status === "hidden").length;
+
+    const rejectedCount =
+        allComments.filter(x => x.status === "rejected").length;
+
+    const pinnedCount =
+        allComments.filter(x => x.is_pinned).length;
+
+    const area =
+        document.getElementById("summaryArea");
+
+    area.innerHTML =
+        summaryCard("総投稿数", total) +
+        summaryCard("公開中", publicCount) +
+        summaryCard("未確認", pendingCount) +
+        summaryCard("非公開", hiddenCount) +
+        summaryCard("却下", rejectedCount) +
+        summaryCard("固定表示", pinnedCount);
+}
+
+function summaryCard(label, value){
+
+    return '<div class="summaryCard">' +
+        '<div class="label">' + escapeHtml(label) + '</div>' +
+        '<div class="value">' + escapeHtml(value) + '</div>' +
+        '</div>';
+}
+
+function renderTimeChart(){
+
+    const buckets = makeTimeBuckets(allComments, 5);
+
+    const max =
+        Math.max(...Object.values(buckets), 1);
+
+    const area =
+        document.getElementById("timeChart");
+
+    if(allComments.length === 0){
+        area.innerHTML = "<p>投稿はまだありません。</p>";
+        return;
+    }
+
+    area.innerHTML = "";
+
+    Object.keys(buckets).forEach(label => {
+
+        const count =
+            buckets[label];
+
+        const percent =
+            Math.round((count / max) * 100);
+
+        const row =
+            document.createElement("div");
+
+        row.className = "barRow";
+
+        row.innerHTML =
+            '<div>' + escapeHtml(label) + '</div>' +
+            '<div class="barOuter"><div class="barInner" style="width:' + percent + '%"></div></div>' +
+            '<div>' + count + '件</div>';
+
+        area.appendChild(row);
+    });
+}
+
+function makeTimeBuckets(items, minutes){
+
+    const buckets = {};
+
+    items.forEach(item => {
+
+        const d =
+            new Date(item.created_at);
+
+        d.setSeconds(0);
+        d.setMilliseconds(0);
+
+        const m =
+            Math.floor(d.getMinutes() / minutes) * minutes;
+
+        d.setMinutes(m);
+
+        const label =
+            d.toLocaleTimeString("ja-JP", {
+                hour:"2-digit",
+                minute:"2-digit"
+            });
+
+        if(!buckets[label]){
+            buckets[label] = 0;
+        }
+
+        buckets[label]++;
+    });
+
+    return buckets;
+}
+
+function renderStatusChart(){
+
+    const statusMap = {
+        pending:"未確認",
+        public:"公開中",
+        hidden:"非公開",
+        rejected:"却下"
+    };
+
+    const counts = {
+        pending:0,
+        public:0,
+        hidden:0,
+        rejected:0
+    };
+
+    allComments.forEach(item => {
+
+        if(counts[item.status] === undefined){
+            counts[item.status] = 0;
+        }
+
+        counts[item.status]++;
+    });
+
+    const max =
+        Math.max(...Object.values(counts), 1);
+
+    const area =
+        document.getElementById("statusChart");
+
+    area.innerHTML = "";
+
+    Object.keys(counts).forEach(status => {
+
+        const count =
+            counts[status];
+
+        const percent =
+            Math.round((count / max) * 100);
+
+        const row =
+            document.createElement("div");
+
+        row.className = "barRow";
+
+        row.innerHTML =
+            '<div>' + escapeHtml(statusMap[status] || status) + '</div>' +
+            '<div class="barOuter"><div class="barInner" style="width:' + percent + '%"></div></div>' +
+            '<div>' + count + '件</div>';
+
+        area.appendChild(row);
+    });
+}
+
+function renderTable(){
+
+    const tbody =
+        document.getElementById("commentsTable");
+
+    tbody.innerHTML = "";
+
+    allComments.forEach(item => {
+
+        const tr =
+            document.createElement("tr");
+
+        tr.innerHTML =
+            "<td>" + escapeHtml(formatDate(item.created_at)) + "</td>" +
+            "<td>" + escapeHtml(item.user_name || "匿名") + "</td>" +
+            "<td>" + escapeHtml(statusLabel(item.status)) + "</td>" +
+            "<td>" + escapeHtml(item.is_pinned ? "固定" : "") + "</td>" +
+            '<td class="commentCell">' + escapeHtml(item.comment || "") + "</td>";
+
+        tbody.appendChild(tr);
+    });
+}
+
+function downloadCSV(){
+
+    if(allComments.length === 0){
+        showError("ダウンロードできる投稿がありません。");
+        return;
+    }
+
+    const headers = [
+        "id",
+        "event_id",
+        "created_at",
+        "user_name",
+        "comment",
+        "status",
+        "is_pinned",
+        "display_order"
+    ];
+
+    const rows =
+        allComments.map(item => [
+            item.id,
+            item.event_id,
+            item.created_at,
+            item.user_name || "",
+            item.comment || "",
+            item.status || "",
+            item.is_pinned ? "true" : "false",
+            item.display_order ?? ""
+        ]);
+
+    const csv =
+        "\uFEFF" +
+        [
+            headers,
+            ...rows
+        ]
+        .map(row => row.map(csvEscape).join(","))
+        .join("\n");
+
+    const blob =
+        new Blob(
+            [csv],
+            {
+                type:"text/csv;charset=utf-8;"
+            }
+        );
+
+    const url =
+        URL.createObjectURL(blob);
+
+    const a =
+        document.createElement("a");
+
+    const safeEventName =
+        (eventName || "event")
+        .replace(/[\\/:*?"<>|]/g, "_");
+
+    a.href = url;
+    a.download =
+        "NarrativeBoard_" +
+        safeEventName +
+        "_" +
+        new Date().toISOString().slice(0,10) +
+        ".csv";
+
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+
+    URL.revokeObjectURL(url);
+}
+
+function csvEscape(value){
+
+    const text =
+        String(value ?? "");
+
+    return '"' +
+        text
+        .replaceAll('"', '""')
+        .replaceAll("\r\n", "\n")
+        .replaceAll("\r", "\n") +
+        '"';
+}
+
+function statusLabel(status){
+
+    const labels = {
+        pending:"未確認",
+        public:"公開中",
+        hidden:"非公開",
+        rejected:"却下"
+    };
+
+    return labels[status] || status;
+}
+
+function formatDate(value){
+
+    const date =
+        new Date(value);
+
+    return date.toLocaleString("ja-JP", {
+        year:"numeric",
+        month:"2-digit",
+        day:"2-digit",
+        hour:"2-digit",
+        minute:"2-digit",
+        second:"2-digit"
+    });
+}
+
+function showError(message){
+
+    const box =
+        document.getElementById("errorBox");
+
+    box.textContent = message;
+    box.style.display = "block";
+}
+
+function hideError(){
+
+    const box =
+        document.getElementById("errorBox");
+
+    box.textContent = "";
+    box.style.display = "none";
+}
+
+function escapeHtml(text){
+
+    return String(text)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+}
+</script>
+
+</body>
+</html>
